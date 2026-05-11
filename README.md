@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AURA — AI destekli e-ticaret paneli
 
-## Getting Started
+Kadın girişimcilere yönelik, pembe–mor renk paleti ve AI yardımcılarıyla tasarlanmış Next.js 14 (App Router) yönetim arayüzü.
 
-First, run the development server:
+## Çalıştırma
 
 ```bash
+cd aura
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Tarayıcıda [http://localhost:3000](http://localhost:3000) adresini açın. Ana rota `/dashboard` sayfasına yönlendirilir.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Üretim derlemesi:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm start
+```
 
-## Learn More
+## Backend bağlantısı (`lib/api.ts`)
 
-To learn more about Next.js, take a look at the following resources:
+Şu an tüm fonksiyonlar `lib/mock-data.ts` içindeki verileri döndürür. Gerçek API’ye geçerken:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Proje kökünde `.env.local` içinde `NEXT_PUBLIC_API_URL` tanımlayın (örnek aşağıda).
+2. `lib/api.ts` içindeki her fonksiyonda `fetch` ile ilgili endpoint’e istek atın; dönüş tipleri `types/index.ts` ile uyumlu kalsın.
+3. Yorum satırlarında belirtilen HTTP yöntemi ve yol:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Fonksiyon | Endpoint (hedef) |
+|-----------|------------------|
+| `getOrders` | `GET /api/orders` |
+| `getProducts` | `GET /api/products` |
+| `createProduct` | `POST /api/products` |
+| `getConversations` | `GET /api/chat/conversations` |
+| `getAiDraft` | `POST /api/chat/ai-draft` |
+| `getShipments` | `GET /api/shipping/shipments` |
+| `getCampaignSuggestion` | `POST /api/ai/campaign-suggestion` |
 
-## Deploy on Vercel
+## Ortam değişkenleri
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+`.env.local` örneği:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+# REST API tabanı (isteğe bağlı önek)
+NEXT_PUBLIC_API_URL=https://api.example.com
+
+# Sunucu tarafında Anthropic (veya benzeri) çağrıları için — asla istemciye sızdırmayın
+ANTHROPIC_API_KEY=sk-ant-api03-...
+```
+
+İstemci bileşenleri yalnızca `NEXT_PUBLIC_*` değişkenlerini görebilir; gizli anahtarları yalnızca Route Handler / Server Action içinde kullanın.
+
+## Teknolojiler
+
+Next.js 14, React 18, TypeScript, Tailwind CSS, Recharts, Lucide React.
