@@ -42,6 +42,7 @@ export async function createProduct(data: ProductInput): Promise<Product> {
       data.imageUrl ??
       `https://picsum.photos/seed/${encodeURIComponent(id)}/400/400`,
     active: data.active,
+    daily_avg_sales: 0,
   };
 }
 
@@ -112,8 +113,26 @@ export async function getShipments(): Promise<Shipment[]> {
 }
 
 /** POST /api/ai/campaign-suggestion */
+
 export async function getCampaignSuggestion(
   productId: string,
 ): Promise<CampaignSuggestion> {
-  return getDefaultCampaignSuggestion(productId);
+
+  const res = await fetch("http://127.0.0.1:8000/ai/campaign-suggestion", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      product: {
+        id: productId,
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error("Campaign API error");
+  }
+
+  return await res.json();
 }
