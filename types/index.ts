@@ -90,20 +90,25 @@ export interface MonthlySalesPoint {
 }
 
 export type ShipmentStep =
-  | "preparing"
-  | "shipped"
-  | "out_for_delivery"
-  | "delivered";
+  | "hazirlaniyor"
+  | "kargoya_verildi"
+  | "dagitimda"
+  | "teslim_edildi";
 
 export interface Shipment {
   id: string;
-  customerName: string;
-  orderNumber: string;
-  productName: string;
+  order_id: string;
+  customer_id: string;
+  customer_name?: string;
+  product_name?: string;
+  order_status?: string;
   carrier: string;
-  trackingNumber: string;
-  currentStep: ShipmentStep;
-  delayed: boolean;
+  tracking_number: string;
+  status: string;
+  steps: ShipmentStep[];
+  is_delayed: boolean;
+  delay_hours: number;
+  last_update: string;
 }
 
 export interface CampaignSuggestion {

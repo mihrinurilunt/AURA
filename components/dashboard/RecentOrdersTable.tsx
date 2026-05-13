@@ -5,16 +5,21 @@ import { Trash2 } from "lucide-react";
 import { CancelOrderModal } from "@/components/dashboard/CancelOrderModal";
 import type { Order, OrderStatus } from "@/types";
 
-function statusLabel(s: OrderStatus) {
-  if (s === "received") return "Sipariş alındı";
-  if (s === "shipping") return "Kargoda";
+type RecentOrder = Order & {
+  product_image?: string;
+  product_name?: string;
+};
+
+function statusLabel(s: string) {
+  if (s === "received" || s === "siparis_alindi") return "Sipariş alındı";
+  if (s === "shipping" || s === "kargoda") return "Kargoda";
   return "Teslim edildi";
 }
 
-function statusClass(s: OrderStatus) {
-  if (s === "received")
+function statusClass(s: string) {
+  if (s === "received" || s === "siparis_alindi")
     return "bg-aura-pink-bg text-aura-pink border border-aura-pink-light/60";
-  if (s === "shipping")
+  if (s === "shipping" || s === "kargoda")
     return "bg-aura-purple-light text-aura-purple border border-aura-purple/20";
   return "bg-emerald-50 text-emerald-700 border border-emerald-100";
 }
@@ -23,11 +28,12 @@ export function RecentOrdersTable({
   orders,
   onOrdersChange,
 }: {
-  orders: Order[];
-  onOrdersChange: (next: Order[]) => void;
+  orders: RecentOrder[] | null | undefined;
+  onOrdersChange: (next: RecentOrder[]) => void;
 }) {
+  const safeOrders = orders ?? [];
   const [open, setOpen] = useState(false);
-  const [target, setTarget] = useState<Order | null>(null);
+  const [target, setTarget] = useState<RecentOrder | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
@@ -56,7 +62,7 @@ export function RecentOrdersTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-aura-pink-light/40">
-            {orders.map((o) => {
+            {safeOrders.map((o) => {
               const first = o.items?.[0];
               const customer = o.customer;
               return (
@@ -65,8 +71,8 @@ export function RecentOrdersTable({
                     <div className="flex items-center gap-2">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={first?.imageUrl ?? "/placeholder-product.png"}
-                        alt=""
+                        src={first?.imageUrl || o.product_image || "/placeholder.png"}
+                        alt={o.product_name || first?.name || "Ürün"}
                         className="h-8 w-8 rounded-full object-cover ring-2 ring-aura-pink-light/60"
                       />
                       <span className="font-medium text-aura-text-primary">
@@ -134,7 +140,7 @@ export function RecentOrdersTable({
           setTarget(null);
         }}
         onSuccess={(orderId) => {
-          onOrdersChange(orders.filter((x) => x.id !== orderId));
+          onOrdersChange(safeOrders.filter((x) => x.id !== orderId));
           setToast("Sipariş iptal edildi, müşteriye mesaj gönderildi ✓");
         }}
       />

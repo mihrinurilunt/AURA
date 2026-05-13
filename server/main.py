@@ -169,10 +169,10 @@ async def root():
 
 @app.get("/health")
 async def health():
-    api_key_set = bool(os.getenv("ANTHROPIC_API_KEY"))
+    gemini_key = bool(os.getenv("GEMINI_API_KEY"))
     return {
         "status": "ok",
-        "anthropic_api_key_configured": api_key_set,
+        "gemini_api_key_configured": gemini_key,
         "scheduler_running": scheduler.running,
     }
 
@@ -199,29 +199,17 @@ async def get_order(order_id: str):
     return order
 
 
-@app.delete("/orders/{order_id}")
-async def cancel_order(order_id: str, body: CancelOrderRequest, background_tasks: BackgroundTasks):
-    """
-    Siparişi iptal eder. 
-    İptal sonrası Claude ile müşteriye özür mesajı taslağı üretir (arka planda).
-    """
+@app.post("/orders/{order_id}/cancel")
+async def cancel_order(order_id: str, body: CancelOrderRequest):
     order = next((o for o in orders if o["id"] == order_id), None)
     if not order:
         raise HTTPException(status_code=404, detail="Sipariş bulunamadı")
-
     order["status"] = "iptal"
     order["cancel_reason"] = body.reason
-
-    # Stok güncelle
     product = next((p for p in products if p["id"] == order.get("product_id")), None)
     if product:
         product["stock"] = product.get("stock", 0) + order.get("quantity", 1)
-
-    return {
-        "success": True,
-        "message": "Sipariş iptal edildi",
-        "order_id": order_id,
-    }
+    return {"success": True, "order_id": order_id}
 
 
 # ---------------------------------------------------------------------------
@@ -297,8 +285,17 @@ async def get_customer(customer_id: str):
 # ---------------------------------------------------------------------------
 @app.get("/shipping")
 async def get_shipments():
-    """Tüm kargo takip verilerini döner."""
-    return {"shipments": shipments}
+    enriched = []
+    for s in shipments:
+        order = next((o for o in orders if o["id"] == s.get("order_id")), {})
+        customer = next((c for c in customers if c["id"] == s.get("customer_id")), {})
+        enriched.append({
+            **s,
+            "customer_name": customer.get("name", ""),
+            "product_name": order.get("product_name", ""),
+            "order_status": order.get("status", ""),
+        })
+    return {"shipments": enriched}
 
 
 @app.get("/shipping/{shipment_id}")
@@ -358,69 +355,19 @@ async def approve_and_send_message(body: ApproveMessageRequest):
 
 
 # ---------------------------------------------------------------------------
-# AI — CHAT (streaming)
+# AI — CHAT (not streaming streaming)
 # ---------------------------------------------------------------------------
-@app.get("/conversations")
-async def get_conversations():
-    """Tüm sohbet geçmişini döner. Chat sayfasındaki geçmiş sohbetler listesi için kullanılır."""
-    # Gerçek uygulamada DB'den çekilir
-    conversations = []
-    for c in customers:
-        customer_orders = [o for o in orders if o.get("customer_id") == c["id"]]
-        last_message = f"{len(customer_orders)} sipariş"
-        last_time = max((o.get("date", "") for o in customer_orders), default="")
-        conversations.append({
-            "id": f"conv-{c['id']}",
-            "customer_id": c["id"],
-            "message": "",
-            "response": "",
-            "timestamp": last_time,
-            "customerName": c["name"],
-            "avatarUrl": c.get("avatar_url", "/avatars/default.png"),
-            "lastPreview": last_message,
-            "lastTime": last_time,
-        })
-    return {"conversations": conversations}
-
-@app.post("/ai/chat")
-async def ai_chat(body: ChatRequest):
-    """
-    Müşteri mesajına AI taslak yanıt üretir.
-    SSE (Server-Sent Events) ile stream eder.
-    """
-    customer = next((c for c in customers if c["id"] == body.customer_id), None)
-    customer_orders = [o for o in orders if o.get("customer_id") == body.customer_id]
-
-    return StreamingResponse(
-        generate_chat_draft(
-            customer=customer,
-            customer_orders=customer_orders,
-            message=body.message,
-            history=body.conversation_history,
-        ),
-        media_type="text/event-stream",
-    )
-
-
 @app.post("/ai/chat/simple")
 async def ai_chat_simple(body: ChatRequest):
-    """
-    Streaming istemiyorsan bu endpoint'i kullan. Tam yanıtı tek seferde döner.
-    """
     customer = next((c for c in customers if c["id"] == body.customer_id), None)
     customer_orders = [o for o in orders if o.get("customer_id") == body.customer_id]
-
-    result = ""
-    async for chunk in generate_chat_draft(
+    draft = await generate_chat_draft(
         customer=customer,
         customer_orders=customer_orders,
         message=body.message,
         history=body.conversation_history,
-    ):
-        if chunk.startswith("data: "):
-            result += chunk[6:].strip()
-
-    return {"draft": result}
+    )
+    return {"draft": draft}
 
 
 # ---------------------------------------------------------------------------

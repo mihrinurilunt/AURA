@@ -20,11 +20,9 @@ export default function ShippingPage() {
   }, []);
 
   const summary = useMemo(() => {
-    const pending = items.filter((s) => s.currentStep === "preparing").length;
-    const inTransit = items.filter(
-      (s) => s.currentStep === "shipped" || s.currentStep === "out_for_delivery",
-    ).length;
-    const delivered = items.filter((s) => s.currentStep === "delivered").length;
+    const pending = items.filter((s) => s.status === "hazirlaniyor").length;
+    const inTransit = items.filter((s) => ["kargoya_verildi", "dagitimda"].includes(s.status)).length;
+    const delivered = items.filter((s) => s.status === "teslim_edildi").length;
     return { pending, inTransit, delivered };
   }, [items]);
 

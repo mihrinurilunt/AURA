@@ -93,31 +93,33 @@ export function ShipmentCard({ shipment }: { shipment: Shipment }) {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex-1 space-y-1">
             <p className="text-sm font-semibold text-aura-text-primary">
-              {shipment.customerName}
+              {shipment.customer_name || shipment.customerName}
             </p>
             <p className="text-xs font-mono text-aura-text-secondary">
-              {shipment.orderNumber}
+              {shipment.order_id}
             </p>
-            <p className="text-sm text-aura-text-secondary">{shipment.productName}</p>
+            <p className="text-sm text-aura-text-secondary">
+              {shipment.product_name || shipment.productName}
+            </p>
           </div>
           <div className="flex-1 border-t border-aura-pink-light/40 pt-4 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
             <p className="text-xs font-semibold uppercase tracking-wide text-aura-purple">
               {shipment.carrier}
             </p>
             <p className="mt-1 font-mono text-sm text-aura-text-primary">
-              {shipment.trackingNumber}
+              {shipment.tracking_number}
             </p>
           </div>
           <div className="flex flex-1 flex-col gap-3 lg:items-end">
-            <TrackingTimeline current={shipment.currentStep} />
+            <TrackingTimeline steps={shipment.steps || []} />
             <div className="flex flex-wrap items-center gap-2">
-              {shipment.delayed && (
+              {shipment.is_delayed && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-700">
                   <AlertTriangle className="h-3.5 w-3.5" />
                   Gecikme bekleniyor
                 </span>
               )}
-              {shipment.delayed && (
+              {shipment.is_delayed && (
                 <button
                   type="button"
                   onClick={handleNotifyCustomer}
@@ -157,7 +159,7 @@ export function ShipmentCard({ shipment }: { shipment: Shipment }) {
               Müşteriye Gecikme Bildirimi
             </h2>
             <p className="mt-1 text-sm text-aura-text-secondary">
-              {shipment.customerName} — {shipment.trackingNumber}
+              {shipment.customer_name || shipment.customerName} — {shipment.tracking_number}
             </p>
 
             {modal.loading ? (

@@ -124,49 +124,6 @@ export const getSalesByMonth = () =>
 // ---------------------------------------------------------------------------
 // AI — Chat (Streaming)
 // ---------------------------------------------------------------------------
-export async function streamChatDraft(
-  customerId: string,
-  message: string,
-  history: { role: string; content: string }[],
-  onChunk: (text: string) => void,
-  onDone: () => void,
-): Promise<void> {
-  const res = await fetch(`${BASE_URL}/ai/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      customer_id: customerId,
-      message,
-      conversation_history: history,
-    }),
-  })
-
-  if (!res.ok || !res.body) {
-    onChunk('[AI yanıt üretemedi]')
-    onDone()
-    return
-  }
-
-  const reader = res.body.getReader()
-  const decoder = new TextDecoder()
-
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    const chunk = decoder.decode(value)
-    const lines = chunk.split('\n')
-    for (const line of lines) {
-      if (line.startsWith('data: ')) {
-        const text = line.slice(6)
-        if (text) onChunk(text)
-      }
-    }
-  }
-
-  onDone()
-}
-
-// Streaming istemiyorsan
 export const getChatDraft = (
   customerId: string,
   message: string,
@@ -307,7 +264,6 @@ export const api = {
   approveAndSendMessage,
   getAnalyticsSummary,
   getSalesByMonth,
-  streamChatDraft,
   getChatDraft,
   getCampaignSuggestion,
   getInventoryAnalysis,

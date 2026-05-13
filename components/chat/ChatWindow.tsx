@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Send } from "lucide-react";
-import { streamChatDraft } from "@/lib/api";
+import { getChatDraft } from "@/lib/api";
 import type { Conversation, ChatMessage } from "@/types";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { AiDraftBanner } from "@/components/chat/AiDraftBanner";
@@ -14,11 +14,33 @@ export function ChatWindow({ conversation }: { conversation: Conversation }) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingDraft, setEditingDraft] = useState("");
+  const [history, setHistory] = useState<{ role: string; content: string }[]>(
+    conversation.messages.map((message) => ({
+      role: message.role === "owner" ? "assistant" : "customer",
+      content: message.text,
+    })),
+  );
+
+  const customerId = conversation.id || "";
+
+  useEffect(() => {
+    setMessages(conversation.messages);
+    setHistory(
+      conversation.messages.map((message) => ({
+        role: message.role === "owner" ? "assistant" : "customer",
+        content: message.text,
+      })),
+    );
+    setInput("");
+    setAiDraft("");
+    setEditingDraft("");
+    setIsEditing(false);
+    setIsStreaming(false);
+  }, [conversation.id, conversation.messages]);
 
   const handleSendMessage = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || !customerId) return;
 
-    // Add customer message to history
     const newMessage: ChatMessage = {
       id: `msg-${Date.now()}`,
       role: "customer",
@@ -26,36 +48,32 @@ export function ChatWindow({ conversation }: { conversation: Conversation }) {
       time: new Date().toLocaleTimeString("tr-TR"),
     };
 
+    const nextHistory = [
+      ...history,
+      { role: "customer", content: newMessage.text },
+    ];
+
     setMessages((prev) => [...prev, newMessage]);
+    setHistory(nextHistory);
     setInput("");
     setAiDraft("");
     setIsEditing(false);
     setEditingDraft("");
-
-    // Build conversation history for API
-    const history = messages.map((m) => ({
-      role: m.role,
-      content: m.text,
-    }));
-    history.push({ role: "customer", content: newMessage.text });
-
-    // Stream AI draft
     setIsStreaming(true);
-    let fullDraft = "";
 
-    await streamChatDraft(
-      conversation.id || "customer-1",
-      newMessage.text,
-      history,
-      (chunk) => {
-        fullDraft += chunk;
-        setAiDraft(fullDraft);
-      },
-      () => {
-        setIsStreaming(false);
-        setEditingDraft(fullDraft);
-      },
-    );
+    try {
+      const result = await getChatDraft(customerId, newMessage.text, nextHistory);
+      setAiDraft(result.draft);
+      setEditingDraft(result.draft);
+      setHistory((prev) => [
+        ...prev,
+        { role: "assistant", content: result.draft },
+      ]);
+    } catch (error) {
+      console.error("Chat taslağı alınamadı", error);
+    } finally {
+      setIsStreaming(false);
+    }
   };
 
   const handleSendDraft = async () => {
@@ -82,6 +100,19 @@ export function ChatWindow({ conversation }: { conversation: Conversation }) {
 
   const handleSaveEdit = () => {
     setAiDraft(editingDraft);
+    setHistory((prev) => {
+      const next = [...prev];
+      const lastAssistantIndex = next
+        .map((item) => item.role)
+        .lastIndexOf("assistant");
+      if (lastAssistantIndex >= 0) {
+        next[lastAssistantIndex] = {
+          ...next[lastAssistantIndex],
+          content: editingDraft,
+        };
+      }
+      return next;
+    });
     setIsEditing(false);
   };
 
@@ -186,7 +217,8 @@ export function ChatWindow({ conversation }: { conversation: Conversation }) {
           <button
             type="button"
             onClick={handleSendMessage}
-            disabled={isStreaming || !input.trim()}
+            disabled={!customerId || isStreaming || !input.trim()}
+            title={!customerId ? "Müşteri seçin" : undefined}
             className="inline-flex items-center gap-2 rounded-full bg-aura-pink px-4 py-2 text-sm font-semibold text-white shadow-aura transition hover:bg-aura-purple disabled:opacity-50"
           >
             Gönder

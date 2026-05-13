@@ -3,25 +3,25 @@
 import { Check } from "lucide-react";
 import type { ShipmentStep } from "@/types";
 
-const steps: { key: ShipmentStep; label: string }[] = [
-  { key: "preparing", label: "Hazırlanıyor" },
-  { key: "shipped", label: "Kargoya Verildi" },
-  { key: "out_for_delivery", label: "Dağıtımda" },
-  { key: "delivered", label: "Teslim Edildi" },
+const allSteps: { key: ShipmentStep; label: string }[] = [
+  { key: "hazirlaniyor", label: "Hazırlanıyor" },
+  { key: "kargoya_verildi", label: "Kargoya Verildi" },
+  { key: "dagitimda", label: "Dağıtımda" },
+  { key: "teslim_edildi", label: "Teslim Edildi" },
 ];
 
-export function TrackingTimeline({ current }: { current: ShipmentStep }) {
-  const idx = steps.findIndex((s) => s.key === current);
-  const allComplete = current === "delivered";
+export function TrackingTimeline({ steps }: { steps: ShipmentStep[] }) {
+  const activeKey = steps[steps.length - 1] ?? "";
+  const allComplete = activeKey === "teslim_edildi";
 
   return (
     <div className="w-full max-w-md">
       <div className="flex items-start justify-between gap-2">
-        {steps.map((s, i) => {
-          const done = allComplete || i < idx;
-          const active = !allComplete && i === idx;
+        {allSteps.map((step, i) => {
+          const done = steps.includes(step.key) && step.key !== activeKey;
+          const active = !allComplete && step.key === activeKey;
           return (
-            <div key={s.key} className="flex flex-1 flex-col items-center text-center">
+            <div key={step.key} className="flex flex-1 flex-col items-center text-center">
               <div
                 className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold transition ${
                   done
@@ -42,7 +42,7 @@ export function TrackingTimeline({ current }: { current: ShipmentStep }) {
                       : "text-aura-text-secondary"
                 }`}
               >
-                {s.label}
+                {step.label}
               </p>
             </div>
           );
