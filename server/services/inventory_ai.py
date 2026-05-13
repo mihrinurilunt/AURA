@@ -1,87 +1,83 @@
 """
-AURA — Inventory AI Servisi
-============================
-Stok ve envanter ile ilgili üç AI işlevi:
+AURA — Inventory AI Servisi (Gemini Refactor)
+=============================================
 
-1. check_low_stock() — Düşük stok tespiti, Claude ile "şimdi al" önerisi
-2. generate_stock_commentary() — Dashboard stok uyarı banner'ı için kısa yorum
-3. generate_daily_report() — Gün sonu: satış özeti + anomaliler + yarın önerileri
-
-Kullanıldığı endpoint'ler:
-  GET /ai/inventory/analysis      → generate_stock_commentary()
-  GET /ai/inventory/daily-report  → generate_daily_report()
-  Scheduler (her saat)           → check_low_stock()
-  Scheduler (23:00)              → generate_daily_report()
+İşlevler:
+1. check_low_stock()
+2. generate_stock_commentary()
+3. generate_daily_report()
 """
 
-import os
-import httpx
 from datetime import date
+from collections import Counter
+
+from services.gemini_client import generate_text
+
+LOW_STOCK_THRESHOLD = 10
 
 
-ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
-MODEL = "claude-sonnet-4-20250514"
-
-LOW_STOCK_THRESHOLD = 10  # Bu değerin altı "düşük stok"
-
-
-async def _call_claude(prompt: str, max_tokens: int = 400) -> str:
-    """Claude API'ye basit istek atan yardımcı fonksiyon."""
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        return "AI analizi için ANTHROPIC_API_KEY gereklidir."
-
-    headers = {
-        "x-api-key": api_key,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-    }
-
-    payload = {
-        "model": MODEL,
-        "max_tokens": max_tokens,
-        "messages": [{"role": "user", "content": prompt}],
-    }
-
-    async with httpx.AsyncClient(timeout=25.0) as client:
-        resp = await client.post(ANTHROPIC_API_URL, json=payload, headers=headers)
-
-    if resp.status_code != 200:
-        return f"AI yanıt üretemedi (Hata: {resp.status_code})"
-
-    data = resp.json()
-    return data["content"][0]["text"].strip()
+async def _call_gemini(prompt: str, max_tokens: int = 400) -> str:
+    """
+    Merkezi Gemini text üretim wrapper'ı.
+    """
+    return await generate_text(prompt, max_tokens)
 
 
 async def check_low_stock(products: list[dict]) -> list[dict]:
     """
-    Düşük stoklu ürünleri tespit eder.
-    Her biri için Claude ile "şu ürünü şimdi sipariş ver çünkü..." önerisi üretir.
-    Gerçekte: push notification veya dashboard banner.
+    Kritik stok ürünlerini tespit eder
+    ve AI destekli öneri üretir.
     """
+
     low_stock_items = [
         p for p in products
         if p.get("stock", 0) <= LOW_STOCK_THRESHOLD
     ]
 
     alerts = []
+
     for product in low_stock_items:
+
         velocity = product.get("monthly_sales", [])
-        avg = sum(velocity) / max(len(velocity), 1) if velocity else 0
-        days_left = round(product["stock"] / max(avg / 30, 0.1))
 
-        prompt = f"""AURA mağazası için stok uyarısı yazıyorsun.
+        avg = (
+            sum(velocity) / max(len(velocity), 1)
+            if velocity else 0
+        )
 
-Ürün: {product['name']}
-Kalan stok: {product['stock']} adet
-Aylık ortalama satış: {avg:.0f} adet
-Tahminen {days_left} günde tükenir.
+        days_left = round(
+            product["stock"] / max(avg / 30, 0.1)
+        )
 
-Girişimciye kısa (1 cümle) ve motive edici bir uyarı yaz.
-Örnek: "El Örgüsü Yün Çorap yaklaşık 12 günde bitecek, hemen sipariş ver!"
-Sadece uyarı cümlesini yaz."""
+        prompt = f"""
+Sen AURA mağazasının envanter danışmanısın.
 
-        suggestion = await _call_claude(prompt, max_tokens=100)
+Ürün bilgileri:
+- Ürün: {product['name']}
+- Kalan stok: {product['stock']} adet
+- Aylık ortalama satış: {avg:.0f} adet
+- Tahmini tükenme süresi: {days_left} gün
+
+Kurallar:
+- Türkçe yaz
+- Tek cümle yaz
+- Kısa ve aksiyon odaklı ol
+- Girişimciyi motive et
+- Sadece uyarıyı yaz
+"""
+
+        try:
+            suggestion = await _call_gemini(
+                prompt,
+                max_tokens=100
+            )
+
+        except Exception:
+            suggestion = (
+                f"{product['name']} yaklaşık "
+                f"{days_left} gün içinde tükenebilir, "
+                "stok yenilemesi önerilir."
+            )
 
         alert = {
             "product_id": product["id"],
@@ -90,7 +86,9 @@ Sadece uyarı cümlesini yaz."""
             "days_until_empty": days_left,
             "ai_suggestion": suggestion,
         }
+
         alerts.append(alert)
+
         print(f"[STOK UYARI] {suggestion}")
 
     return alerts
@@ -101,11 +99,19 @@ async def generate_stock_commentary(
     orders: list[dict],
 ) -> str:
     """
-    Dashboard'daki AI stok uyarı banner'ı için tek paragraf yorum.
-    Düşük stok + en çok satan ürünlere odaklanır.
+    Dashboard AI stok banner özeti üretir.
     """
-    low_stock = [p for p in products if p.get("stock", 0) <= LOW_STOCK_THRESHOLD]
-    best_seller = max(products, key=lambda p: sum(p.get("monthly_sales", [0])), default=None)
+
+    low_stock = [
+        p for p in products
+        if p.get("stock", 0) <= LOW_STOCK_THRESHOLD
+    ]
+
+    best_seller = max(
+        products,
+        key=lambda p: sum(p.get("monthly_sales", [0])),
+        default=None,
+    )
 
     product_summary = "\n".join([
         f"- {p['name']}: {p['stock']} adet kaldı"
@@ -113,21 +119,36 @@ async def generate_stock_commentary(
     ])
 
     best_info = (
-        f"En çok satan: {best_seller['name']} ({sum(best_seller.get('monthly_sales', []))} aylık toplam)"
+        f"En çok satan ürün: "
+        f"{best_seller['name']} "
+        f"({sum(best_seller.get('monthly_sales', []))} satış)"
         if best_seller else ""
     )
 
-    prompt = f"""AURA mağazası için stok durumu özeti yaz.
+    prompt = f"""
+AURA mağazası için stok değerlendirme özeti yaz.
 
-Kritik stok seviyeleri:
-{product_summary if product_summary else "Tüm stoklar yeterli."}
+Kritik stok ürünleri:
+{product_summary if product_summary else "Kritik stok yok"}
 
 {best_info}
 
-Girişimciye yönelik kısa (2 cümle), net ve aksiyon odaklı bir özet yaz.
-Sadece özeti yaz."""
+Kurallar:
+- Türkçe yaz
+- Maksimum 2 cümle
+- Net ve aksiyon odaklı ol
+- Dashboard banner formatına uygun yaz
+- Sadece özeti yaz
+"""
 
-    return await _call_claude(prompt, max_tokens=150)
+    try:
+        return await _call_gemini(prompt, max_tokens=150)
+
+    except Exception:
+        return (
+            "Bazı ürünlerde kritik stok seviyeleri tespit edildi. "
+            "En çok satan ürünlerin stoklarının kontrol edilmesi önerilir."
+        )
 
 
 async def generate_daily_report(
@@ -135,38 +156,74 @@ async def generate_daily_report(
     products: list[dict],
 ) -> str:
     """
-    Her gece 23:00'de çalışır.
-    Bugünün satışlarını, anomalileri ve yarın için önerileri özetler.
+    Gün sonu AI raporu üretir.
     """
+
     today = date.today().isoformat()
-    today_orders = [o for o in orders if o.get("date", "") == today]
-    today_revenue = sum(o.get("total_price", 0) for o in today_orders)
 
-    delivered_today = [o for o in today_orders if o.get("status") == "teslim_edildi"]
-    delayed_today = [o for o in orders if o.get("is_delayed")]
+    today_orders = [
+        o for o in orders
+        if o.get("date", "") == today
+    ]
 
-    low_stock = [p for p in products if p.get("stock", 0) <= LOW_STOCK_THRESHOLD]
+    today_revenue = sum(
+        o.get("total_price", 0)
+        for o in today_orders
+    )
 
-    # Kategori bazlı satış
-    from collections import Counter
-    categories = Counter(o.get("category", "Diğer") for o in today_orders)
-    cat_summary = ", ".join(f"{k}: {v} adet" for k, v in categories.most_common())
+    delivered_today = [
+        o for o in today_orders
+        if o.get("status") == "teslim_edildi"
+    ]
 
-    prompt = f"""AURA mağazası gün sonu raporu ({today}).
+    delayed_today = [
+        o for o in orders
+        if o.get("is_delayed")
+    ]
 
-Bugünün verileri:
-- Toplam yeni sipariş: {len(today_orders)}
+    low_stock = [
+        p for p in products
+        if p.get("stock", 0) <= LOW_STOCK_THRESHOLD
+    ]
+
+    categories = Counter(
+        o.get("category", "Diğer")
+        for o in today_orders
+    )
+
+    cat_summary = ", ".join(
+        f"{k}: {v} adet"
+        for k, v in categories.most_common()
+    )
+
+    prompt = f"""
+AURA mağazası için gün sonu raporu hazırla.
+
+Tarih: {today}
+
+Veriler:
+- Yeni sipariş: {len(today_orders)}
 - Günlük ciro: {today_revenue:.0f} TL
-- Teslim edilen: {len(delivered_today)} sipariş
-- Geciken kargo sayısı: {len(delayed_today)}
-- Kategori bazlı satış: {cat_summary if cat_summary else "Veri yok"}
-- Kritik stok altındaki ürün sayısı: {len(low_stock)}
+- Teslim edilen sipariş: {len(delivered_today)}
+- Geciken kargo: {len(delayed_today)}
+- Kritik stok ürün sayısı: {len(low_stock)}
+- Kategori satışları: {cat_summary if cat_summary else "Veri yok"}
 
-Girişimciye yönelik bir gün sonu raporu yaz:
-1. Bugünün özeti (olumlu bir şey vurgula)
-2. Dikkat edilmesi gereken bir anomali (varsa)
-3. Yarın için bir öneri
+Kurallar:
+1. Günün olumlu özetini yap
+2. Varsa dikkat edilmesi gereken durumu belirt
+3. Yarın için öneri ver
+4. Maksimum 5 cümle yaz
+5. Türkçe yaz
+6. Motive edici ama profesyonel ton kullan
+"""
 
-Max 5 cümle, sıcak ve motive edici ton, Türkçe."""
+    try:
+        return await _call_gemini(prompt, max_tokens=400)
 
-    return await _call_claude(prompt, max_tokens=400)
+    except Exception:
+        return (
+            "Bugün mağazada aktif satış hareketliliği gözlemlendi. "
+            "Kritik stok seviyelerindeki ürünlerin takip edilmesi "
+            "ve yarın için stok planlaması yapılması önerilir."
+        )

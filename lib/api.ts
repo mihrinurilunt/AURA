@@ -35,8 +35,8 @@ export const getOrder = (orderId: string) =>
   request<Order>(`/orders/${orderId}`)
 
 export const cancelOrder = (orderId: string, reason?: string) =>
-  request<{ success: boolean }>(`/orders/${orderId}`, {
-    method: 'DELETE',
+  request<{ success: boolean }>(`/orders/${orderId}/cancel`, {
+    method: 'POST',
     body: JSON.stringify({ order_id: orderId, reason }),
   })
 
@@ -47,14 +47,11 @@ export const cancelOrderWithAiMessage = (
   reason: string,
   customReason?: string,
 ) =>
-  request<{ success: boolean; aiMessage: string }>('/orders/cancel-with-message', {
+  request<{ success: boolean; aiMessage: string }>(`/orders/${orderNumber}/cancel`, {
     method: 'POST',
     body: JSON.stringify({
-      order_number: orderNumber,
-      customer_name: customerName,
-      product_name: productName,
-      reason,
-      custom_reason: customReason,
+      order_id: orderNumber,
+      reason: customReason || reason,
     }),
   })
 
