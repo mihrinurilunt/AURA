@@ -54,28 +54,3 @@ ANTHROPIC_API_KEY=sk-ant-api03-...
 ## Teknolojiler
 
 Next.js 14, React 18, TypeScript, Tailwind CSS, Recharts, Lucide React.
-# AURA AI — Akıllı İş Ortağı ve E-Ticaret Ekosistemi 🚀
-
-Kadın girişimcileri güçlendirmek için tasarlanmış, Google Gemini tabanlı otonom yönetim paneli.
-
-## 📊 Ekran Görüntüleri
-
-### Genel Bakış ve Analitik Dashboard
-İşletmenizin satış trendlerini ve stok durumunu tek bir ekranda proaktif olarak izleyin.
-
-![Genel Bakış Dashboard](WhatsApp%20Image%202026-05-13%20at%2021.24.31.jpeg)
-
-### Akıllı Envanter ve AI Analizi
-Gemini AI, stok hızınızı analiz ederek kritik eşiklerde "Acil Sipariş Ver" gibi aksiyon önerileri sunar.
-
-![Envanter Analizi](WhatsApp%20Image%202026-05-13%20at%2018.51.12.jpeg)
-
-### Duygu Analizli Müşteri Sohbetleri
-Müşteri mesajlarındaki tonu (Kızgın, Mutlu, Nötr) analiz eden ve kargo API verileriyle otomatik yanıt taslakları oluşturan AI asistanı.
-
-![AI Sohbet Paneli](WhatsApp%20Image%202026-05-13%20at%2021.24.05.jpeg)
-
-### Akıllı Kargo Takibi
-Gecikme risklerini önceden tespit edin ve müşterileriniz şikayet etmeden onları bilgilendirin.
-
-![Kargo Takip Sistemi](WhatsApp%20Image%202026-05-13%20at%2021.23.52.jpeg)
