@@ -1,138 +1,318 @@
-import type {
-  CampaignSuggestion,
-  Conversation,
-  Order,
-  Product,
-  ProductInput,
-  Shipment,
-} from "@/types";
-import {
-  getDefaultCampaignSuggestion,
-  mockConversations,
-  mockOrders,
-  mockProducts,
-  mockShipments,
-} from "@/lib/mock-data";
+/**
+ * AURA — Frontend API İstemcisi
+ * ==============================
+ * Tüm FastAPI çağrıları buradan yapılır.
+ * Bileşenler direkt fetch yazmak yerine bu fonksiyonları kullanır.
+ *
+ * Kullanım:
+ *   import { api } from '@/lib/api'
+ *   const orders = await api.getOrders()
+ */
 
-/** GET /api/orders */
-export async function getOrders(): Promise<Order[]> {
-  return mockOrders;
-}
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
-/** GET /api/products */
-export async function getProducts(): Promise<Product[]> {
-  const response = await fetch('/api/products');
-  if (!response.ok) {
-    throw new Error('Failed to fetch products');
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  })
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Bilinmeyen hata' }))
+    throw new Error(error.detail || `HTTP ${res.status}`)
   }
-  return response.json();
+
+  return res.json()
 }
 
-/** POST /api/products */
-export async function createProduct(data: ProductInput): Promise<Product> {
-  const id = `PRD-${Date.now().toString(36).toUpperCase()}`;
-  return {
-    id,
-    name: data.name,
-    category: data.category,
-    price: data.price,
-    stock: data.stock,
-    description: data.description,
-    imageUrl:
-      data.imageUrl ??
-      `https://picsum.photos/seed/${encodeURIComponent(id)}/400/400`,
-    active: data.active,
-    daily_avg_sales: 0,
-  };
-}
+// ---------------------------------------------------------------------------
+// Siparişler
+// ---------------------------------------------------------------------------
+export const getOrders = () =>
+  request<{ orders: Order[] }>('/orders').then(r => r.orders)
 
-/** GET /api/chat/conversations */
-export async function getConversations(): Promise<Conversation[]> {
-  return mockConversations;
-}
+export const getOrder = (orderId: string) =>
+  request<Order>(`/orders/${orderId}`)
 
-/** POST /api/chat/ai-draft */
-export async function getAiDraft(
-  message: string,
-  orderId?: string,
-): Promise<string> {
-  const lower = message.toLowerCase();
-  if (
-    lower.includes("ezilmiş") ||
-    lower.includes("kırılmış") ||
-    lower.includes("hayal kırıklığı")
-  ) {
-    return "Merhaba, yaşattığımız mağduriyet için özür dilerim. Ücretsiz değişim veya iade için hemen size özel bir çözüm linki paylaşıyorum." +
-      (orderId ? ` (Sipariş: ${orderId})` : "");
-  }
-  if (lower.includes("kargo") || lower.includes("ne zaman")) {
-    return "Merhaba, siparişiniz bugün içinde kargoya verilecek; takip numarasını mesajınıza ileteceğim.";
-  }
-  return "Merhaba, mesajınız için teşekkürler. Talebinizi not aldım ve en kısa sürede size dönüş yapacağım." +
-    (orderId ? ` Referans: ${orderId}` : "");
-}
+export const cancelOrder = (orderId: string, reason?: string) =>
+  request<{ success: boolean }>(`/orders/${orderId}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ order_id: orderId, reason }),
+  })
 
-/** POST /api/orders/{id}/cancel */
-export async function cancelOrderWithAiMessage(
-  orderId: string,
+export const cancelOrderWithAiMessage = (
+  orderNumber: string,
   customerName: string,
   productName: string,
   reason: string,
   customReason?: string,
-): Promise<{ aiMessage: string; success: boolean }> {
-  const reasonMap: Record<string, string> = {
-    "Stok tükendi": "stock",
-    "Ürün hasarlı / kalite sorunu": "damaged",
-    "Kargo sorunu": "shipping",
-    "Satıcı kaynaklı hata": "seller",
-    Diğer: "other",
-  };
-
-  const messages: Record<string, string> = {
-    stock: `Merhaba ${customerName},\n\n${orderId} numaralı siparişiniz maalesef iptal edilmiştir.\n\nSipariş ettiğiniz "${productName}" ürünü, anlık stok güncellemesindeki bir aksaklık nedeniyle tükendi. Bu durumun yarattığı hayal kırıklığı için içtenlikle özür dileriz.\n\nÖdemeniz 1-3 iş günü içinde kartınıza iade edilecektir. Ürün tekrar stoğa girdiğinde sizi öncelikli olarak bilgilendireceğiz.\n\nHerhangi bir sorunuz için bize ulaşmaktan çekinmeyin. İyi günler dileriz! 🌸`,
-
-    damaged: `Merhaba ${customerName},\n\n${orderId} numaralı siparişinizle ilgili önemli bir güncelleme paylaşmak istiyoruz.\n\nKalite kontrol sürecimizde "${productName}" ürününün standartlarımızı karşılamadığı tespit edildi ve siparişiniz iptal edildi. Yüksek kalite anlayışımızdan ödün vermemek için aldığımız bu kararı anlayışla karşılayacağınızı umuyoruz.\n\nÖdemeniz tam olarak iade edilecek, ayrıca bir sonraki alışverişinizde kullanabileceğiniz %10 indirim kodu hesabınıza tanımlanacaktır.\n\nDeğerli müşterimiz olduğunuz için teşekkür ederiz! 💜`,
-
-    shipping: `Merhaba ${customerName},\n\n${orderId} numaralı siparişinizde kargo sürecinde beklenmedik bir sorun yaşandı ve siparişiniz iptal edilmek zorunda kalındı.\n\nKargo partnerimizden kaynaklanan bu aksaklık için özür dileriz. Ödemeniz 1-3 iş günü içinde tam olarak iade edilecek, bir sonraki siparişinizde ücretsiz kargo hakkı size tanınacaktır.\n\nSorularınız için her zaman buradayız! 🌸`,
-
-    seller: `Merhaba ${customerName},\n\n${orderId} numaralı siparişinizin iptal edilmesi gerekti. Tamamen bizden kaynaklanan bir operasyonel aksaklık yaşandı ve bunun sizi etkilemesi bizi çok üzdü.\n\nÖdemeniz derhal iade sürecine alınmış olup 1-3 iş günü içinde hesabınıza geçecektir. Yaşattığımız mağduriyet için özür diler, bir sonraki alışverişinizde %15 indirim sunmak isteriz.\n\nDeğerli geri bildirimleriniz için kapımız her zaman açık! 💜`,
-
-    other: `Merhaba ${customerName},\n\n${orderId} numaralı siparişinizin${customReason ? ` (${customReason})` : ""} iptal edilmesi gerekti. Bu durum için özür dileriz.\n\nÖdemeniz 1-3 iş günü içinde iade edilecektir. Herhangi bir sorunuz olursa lütfen bizimle iletişime geçin.\n\nAnlayışınız için teşekkür ederiz! 🌸`,
-  };
-
-  const type = reasonMap[reason] || "other";
-  return {
-    aiMessage: messages[type],
-    success: true,
-  };
-}
-
-/** GET /api/shipping/shipments */
-export async function getShipments(): Promise<Shipment[]> {
-  return mockShipments;
-}
-
-/** POST /api/ai/campaign-suggestion */
-
-export async function getCampaignSuggestion(
-  productId: string,
-): Promise<CampaignSuggestion> {
-
-  const res = await fetch("http://127.0.0.1:8000/ai/campaign-suggestion", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+) =>
+  request<{ success: boolean; aiMessage: string }>('/orders/cancel-with-message', {
+    method: 'POST',
     body: JSON.stringify({
-      product: {
-        id: productId,
-      },
+      order_number: orderNumber,
+      customer_name: customerName,
+      product_name: productName,
+      reason,
+      custom_reason: customReason,
     }),
-  });
+  })
 
-  if (!res.ok) {
-    throw new Error("Campaign API error");
+// ---------------------------------------------------------------------------
+// Ürünler
+// ---------------------------------------------------------------------------
+export const getProducts = () =>
+  request<{ products: Product[] }>('/products').then(r => r.products)
+
+export const getProduct = (productId: string) =>
+  request<Product>(`/products/${productId}`)
+
+export const createProduct = (data: Omit<Product, 'id'>) =>
+  request<{ success: boolean; product: Product }>('/products', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+
+export const updateProduct = (productId: string, data: Partial<Product>) =>
+  request<{ success: boolean; product: Product }>(`/products/${productId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+
+export const deleteProduct = (productId: string) =>
+  request<{ success: boolean }>(`/products/${productId}`, { method: 'DELETE' })
+
+// ---------------------------------------------------------------------------
+// Müşteriler
+// ---------------------------------------------------------------------------
+export const getCustomers = () =>
+  request<{ customers: Customer[] }>('/customers').then(r => r.customers)
+
+export const getCustomer = (customerId: string) =>
+  request<Customer & { orders: Order[] }>(`/customers/${customerId}`)
+
+// ---------------------------------------------------------------------------
+// Kargo
+// ---------------------------------------------------------------------------
+export const getShipments = () =>
+  request<{ shipments: Shipment[] }>('/shipping').then(r => r.shipments)
+
+export const triggerDelayAlert = (shipmentId: string) =>
+  request<{
+    success: boolean
+    draft_message: string
+    customer: Customer
+    shipment_id: string
+  }>(`/shipping/${shipmentId}/alert`, { method: 'POST' })
+
+export const approveAndSendMessage = (data: {
+  customer_id: string
+  message: string
+  order_id: string
+}) =>
+  request<{ success: boolean }>('/shipping/approve-message', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+
+// ---------------------------------------------------------------------------
+// Analitik
+// ---------------------------------------------------------------------------
+export const getAnalyticsSummary = () =>
+  request<AnalyticsSummary>('/analytics/summary')
+
+export const getSalesByMonth = () =>
+  request<{ monthly_sales: Record<string, number> }>('/analytics/sales-by-month')
+
+// ---------------------------------------------------------------------------
+// AI — Chat (Streaming)
+// ---------------------------------------------------------------------------
+export async function streamChatDraft(
+  customerId: string,
+  message: string,
+  history: { role: string; content: string }[],
+  onChunk: (text: string) => void,
+  onDone: () => void,
+): Promise<void> {
+  const res = await fetch(`${BASE_URL}/ai/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      customer_id: customerId,
+      message,
+      conversation_history: history,
+    }),
+  })
+
+  if (!res.ok || !res.body) {
+    onChunk('[AI yanıt üretemedi]')
+    onDone()
+    return
   }
 
-  return await res.json();
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    const chunk = decoder.decode(value)
+    const lines = chunk.split('\n')
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        const text = line.slice(6)
+        if (text) onChunk(text)
+      }
+    }
+  }
+
+  onDone()
+}
+
+// Streaming istemiyorsan
+export const getChatDraft = (
+  customerId: string,
+  message: string,
+  history: { role: string; content: string }[] = [],
+) =>
+  request<{ draft: string }>('/ai/chat/simple', {
+    method: 'POST',
+    body: JSON.stringify({
+      customer_id: customerId,
+      message,
+      conversation_history: history,
+    }),
+  })
+
+export const getConversations = () =>
+  request<{ conversations: APIConversation[] }>('/conversations').then(r => r.conversations)
+
+// ---------------------------------------------------------------------------
+// AI — Kampanya
+// ---------------------------------------------------------------------------
+export const getCampaignSuggestion = (productId: string) =>
+  request<{ product_id: string; suggestion: string }>(`/ai/campaign/${productId}`)
+
+// ---------------------------------------------------------------------------
+// AI — Stok
+// ---------------------------------------------------------------------------
+export const getInventoryAnalysis = () =>
+  request<{ commentary: string }>('/ai/inventory/analysis')
+
+export const getDailyReport = () =>
+  request<{ report: string }>('/ai/inventory/daily-report')
+
+// ---------------------------------------------------------------------------
+// Tip tanımları
+// ---------------------------------------------------------------------------
+export interface Order {
+  id: string
+  customer_id: string
+  customer_name: string
+  product_id: string
+  product_name: string
+  product_image?: string
+  category: string
+  quantity: number
+  total_price: number
+  date: string
+  status: 'siparis_alindi' | 'kargoda' | 'teslim_edildi' | 'iptal'
+  tracking_number?: string
+  carrier?: string
+  is_delayed?: boolean
+  delay_hours?: number
+}
+
+export interface Product {
+  id: string
+  name: string
+  category: string
+  price: number
+  stock: number
+  description?: string
+  image_url?: string
+  monthly_sales?: number[]
+  low_stock_alert?: boolean
+}
+
+export interface Customer {
+  id: string
+  name: string
+  email: string
+  phone: string
+  total_orders: number
+  last_order: string
+}
+
+export interface Shipment {
+  id: string
+  order_id: string
+  customer_id: string
+  tracking_number: string
+  carrier: string
+  status: string
+  steps: string[]
+  is_delayed: boolean
+  delay_hours: number
+  last_update: string
+}
+
+export interface APIConversation {
+  id: string
+  customer_id: string
+  message: string
+  response: string
+  timestamp: string
+}
+
+export interface Conversation {
+  id: string
+  customerName: string
+  avatarUrl: string
+  lastPreview: string
+  lastTime: string
+  unreadCount: number
+  orderCount: number
+  lastOrderDate: string
+  messages: any[]
+}
+
+export interface AnalyticsSummary {
+  total_sales: number
+  total_customers: number
+  active_products: number
+  monthly_revenue: number
+  in_cargo_count: number
+  order_distribution: {
+    sold_pct: number
+    cargo_pct: number
+    stock_pct: number
+  }
+}
+
+
+
+// Default export — tek obje olarak da kullanılabilir
+export const api = {
+  getOrders,
+  getOrder,
+  cancelOrder,
+  cancelOrderWithAiMessage,
+  getProducts,
+  getProduct,
+  createProduct,
+  updateProduct,
+  deleteProduct,
+  getCustomers,
+  getCustomer,
+  getShipments,
+  triggerDelayAlert,
+  approveAndSendMessage,
+  getAnalyticsSummary,
+  getSalesByMonth,
+  streamChatDraft,
+  getChatDraft,
+  getCampaignSuggestion,
+  getInventoryAnalysis,
+  getDailyReport,
 }

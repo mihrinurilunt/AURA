@@ -12,18 +12,33 @@ export default function ChatPage() {
   const [q, setQ] = useState("");
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const data = await getConversations();
-      if (!cancelled) {
-        setList(data);
-        setActiveId((prev) => prev ?? data[0]?.id ?? null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  let cancelled = false;
+
+  (async () => {
+    const data = await getConversations();
+
+    const mapped: Conversation[] = data.map((c) => ({
+      id: c.id,
+      customerName: c.customer_id, // şimdilik fallback (backend yoksa)
+      avatarUrl: "/avatars/default.png",
+      lastPreview: c.response,
+      lastTime: c.timestamp,
+      unreadCount: 0,
+      orderCount: 4,
+      lastOrderDate: "",
+      messages: [],
+    }));
+
+    if (!cancelled) {
+      setList(mapped);
+      setActiveId((prev) => prev ?? mapped[0]?.id ?? null);
+    }
+  })();
+
+  return () => {
+    cancelled = true;
+  };
+}, []);
 
   const filtered = useMemo(
     () =>

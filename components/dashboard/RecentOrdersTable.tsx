@@ -57,19 +57,20 @@ export function RecentOrdersTable({
           </thead>
           <tbody className="divide-y divide-aura-pink-light/40">
             {orders.map((o) => {
-              const first = o.items[0];
+              const first = o.items?.[0];
+              const customer = o.customer;
               return (
                 <tr key={o.id} className="align-middle">
                   <td className="py-3 pr-4">
                     <div className="flex items-center gap-2">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={o.customer.avatarUrl}
+                        src={first?.imageUrl ?? "/placeholder-product.png"}
                         alt=""
                         className="h-8 w-8 rounded-full object-cover ring-2 ring-aura-pink-light/60"
                       />
                       <span className="font-medium text-aura-text-primary">
-                        {o.customer.name}
+                        {first?.name ?? "Ürün bilgisi yok"}
                       </span>
                     </div>
                   </td>
@@ -80,12 +81,12 @@ export function RecentOrdersTable({
                     <div className="flex items-center gap-2">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={first.imageUrl}
+                        src={customer?.avatarUrl ?? "/avatar-placeholder.png"}
                         alt=""
                         className="h-10 w-10 rounded-lg object-cover"
                       />
                       <span className="max-w-[160px] truncate text-aura-text-primary">
-                        {first.name}
+                        {customer?.name ?? "Bilinmeyen müşteri"}
                       </span>
                     </div>
                   </td>
