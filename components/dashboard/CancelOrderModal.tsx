@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { X } from "lucide-react";
-import { cancelOrderWithAiMessage } from "@/lib/api";
+import { cancelOrderWithAiMessage, cancelOrder } from "@/lib/api";
 import type { Order } from "@/types";
 
 const CANCEL_REASONS = [
@@ -50,8 +50,8 @@ export function CancelOrderModal({
 
   if (!open || !order) return null;
 
-  const productName = order.items[0]?.name ?? "Ürün";
-  const customerName = order.customer.name;
+  const productName = order.items?.[0]?.name ?? "Ürün";
+  const customerName = order.customer?.name ?? "Müşteri";
 
   const handleContinue = async () => {
     setStepError(null);
@@ -79,9 +79,19 @@ export function CancelOrderModal({
     }
   };
 
-  const handleConfirmCancel = () => {
-    onSuccess(order.id);
-    onClose();
+  const handleConfirmCancel = async () => {
+    if (!order) return;
+    
+    try {
+      const actualReason = reason === "Diğer" ? customReason : reason;
+      await cancelOrder(order.id, actualReason);
+      onSuccess(order.id);
+      onClose();
+    } catch (err) {
+      setStepError(
+        err instanceof Error ? err.message : "Sipariş iptal edilirken hata oluştu"
+      );
+    }
   };
 
   return (
