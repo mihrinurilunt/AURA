@@ -5,9 +5,7 @@ from typing import List
 
 from services.inventory_ai import analyze_inventory_service
 from services.campaign_ai import generate_campaign
-from .gemini_service import GeminiAssistant
 
-ai_assistant = GeminiAssistant()
 app = FastAPI()
 
 app.add_middleware(
@@ -57,21 +55,3 @@ async def campaign_suggestion(payload: dict):
             "tags": [],
             "secondary": []
         }
-        # ----------------------------------
-# ENDPOINT 3 - CARGO AI ANALYSIS
-# ----------------------------------
-
-@app.post("/ai/cargo-analysis")
-async def analyze_cargo(phone: str, user_message: str):
-    # Bu veri normalde kargo modülünden dinamik gelecek
-    # Şimdilik dün hazırladığımız mock veriyi kullanıyoruz
-    cargo_data = {
-        "customer": "Ahmet Yılmaz", 
-        "phone": phone, 
-        "status": "yolda", 
-        "carrier_alert": "yoğunluk", 
-        "issue_action": "TELAFİ15"
-    }
-    
-    # Gemini servisini kullanarak analizi gerçekleştir
-    return ai_assistant.analyze_cargo_logic(cargo_data, user_message)
